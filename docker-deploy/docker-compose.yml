@@ -1,0 +1,11 @@
+version: '2'
+
+services:
+  proxy:
+      build: ./src
+      volumes:
+        - ./src:/code
+        - ./logs:/var/log/erss
+      ports:
+        - "12345:80" #binds to port 80 in container
+      command: sh -c "make all && ./proxy"

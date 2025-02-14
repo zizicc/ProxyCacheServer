@@ -1,0 +1,3 @@
+**/logs
+**/*.o
+docker-deploy/src/proxy
