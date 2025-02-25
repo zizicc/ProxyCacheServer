@@ -2,23 +2,67 @@
 #include <sstream>
 #include <iostream>
 
-bool HttpRequest::parse_request(const std::string& request_str) {
+bool HttpRequest::parse_request(std::string& request_str) {
+    //a processable http request will at least have end of header ("\r\n\r\n")
+    //otherwise, incomplete http request (can't process yet, recv more data) or junk data
+    size_t headers_end;
+    if ((headers_end = request_str.find("\r\n\r\n")) == std::string::npos) {
+        return false;
+    }
+
+    //valid header end, so get request line
+    size_t get_start = request_str.find("GET");
+    size_t post_start = request_str.find("POST");
+    size_t connect_start = request_str.find("CONNECT");
+
+    //find earliest occurance of method since might be multiple
+    size_t method_start = std::min(std::min(get_start, post_start), connect_start);
+
+    if (method_start == std::string::npos) { //no valid method, do something about sending HTTP 400
+
+        request_str.erase(0, headers_end + sizeof("\r\n\r\n")); //also erase invalid data up to headers_end
+        return false;
+    }
+
+    request_str.erase(0, method_start); //make start of request line start of string
+    int chars_read = 0; //how many chars we have read
+
     std::istringstream request_stream(request_str);
     std::string line;
 
-    // get the status
+        // HTTP-message   = request-line = method SP request-target SP HTTP-version CRLF
+        // *( header-field CRLF )
+        // CRLF --> Carriage Return and Line Feed ("\r\n")
+        // [ message-body ]
+
+    //PARSE REQUEST LINE
     if (!std::getline(request_stream, line)) {
-        return false;
+        //not sure what to do here, error?
     }
+    chars_read += line.length() + 1; //account for "\n" that getline extracted from stream but didn't put into line
 
     std::istringstream line_stream(line);
-    line_stream >> method >> url >> http_version;
 
-    if (method.empty() || url.empty() || http_version.empty()) {
+    std::string extra;
+    line_stream >> method >> url >> http_version >> extra;
+
+    //not enough request line elements or too many, do something about sending HTTP 400
+    if (method.empty() || url.empty() || http_version.empty() || !(extra.empty()) ) {
         return false;
     }
 
-    // parse header
+    //http_version should have CR ("\r") at end (required at end of request line). if not, send HTTP 400
+    if (http_version[http_version.length()-1] != '\r') {
+        return false;
+    } else {
+        http_version.erase(http_version.length()-1); //remove the \r
+    }
+
+    //handle invalid method, url, or http_version
+
+
+
+    //PARSE HEADER
     while (std::getline(request_stream, line) && line != "\r") {
         size_t pos = line.find(": ");
         if (pos != std::string::npos) {

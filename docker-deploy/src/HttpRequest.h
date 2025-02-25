@@ -15,7 +15,7 @@ private:
 
 public:
     HttpRequest() = default;
-    bool parse_request(const std::string& request_str);
+    bool parse_request(std::string& request_str);
     std::string get_method() const;
     std::string get_url() const;
     std::string get_host() const;
