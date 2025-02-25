@@ -37,5 +37,4 @@ void ClientHandler::handle_client_requests(int client_sockfd) {
     RequestHandler handler(cache);
     handler.handle_request(request, client_socket);
 }
-
 }
