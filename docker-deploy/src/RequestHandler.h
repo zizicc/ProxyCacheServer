@@ -12,7 +12,7 @@ private:
 
 public:
     explicit RequestHandler(CacheManager& cache);
-    void handle_request(HttpRequest& request, int client_socket);
+    int handle_request(HttpRequest& request, int client_socket);
     HttpResponse forward_request(HttpRequest& request);
     void handle_connect(HttpRequest& request, int client_socket);
 };

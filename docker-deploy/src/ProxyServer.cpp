@@ -64,7 +64,7 @@ void ProxyServer::handle_client(int client_sockfd, std::vector<std::thread>::ite
     //enter here with a worker thread
 
     ClientHandler handler; //thread creates client handler
-    handler.handle_client_requests(client_sockfd); //returns when thread finishes (connection closed or server shutdown)
+    handler.handle_client_requests(client_sockfd, cache, stop_flag); //returns when thread finishes (connection closed or server shutdown)
 
     close(client_sockfd);
 

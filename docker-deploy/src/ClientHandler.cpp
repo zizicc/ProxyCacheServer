@@ -19,7 +19,7 @@ ClientHandler::~ClientHandler() {
 
 }
 
-void ClientHandler::handle_client_requests(int client_sockfd, CacheManager& cache) {
+void ClientHandler::handle_client_requests(int client_sockfd, CacheManager& cache, std::atomic<bool>& stop_flag) {
     std::unordered_set<std::string> valid_methods = {"GET", "POST"};
 
     int buffer_read_size = 4096;
@@ -31,13 +31,17 @@ void ClientHandler::handle_client_requests(int client_sockfd, CacheManager& cach
     bool got_headers = false; //true when got all headers for a request
     int request_total_bytes_read; //total bytes read so far for a request
 
-    while (true) {
+    bool force_connection_close = false;
+
+    while (!stop_flag && !force_connection_close) { //will stop when it sees stop flag is set to shutdown socket and thread (or forced close)
             int bytes_read = recv(client_sockfd, buffer, buffer_read_size, 0);
             
             if (bytes_read < 0) {
                 //means something (i think error)
             } else if (bytes_read == 0) {
                 //means something else (i think closed connection)
+                std::cout << "Client closed connection" << std::endl;
+                break;
             }
 
             curr_message += std::string(buffer, bytes_read); //ensure we copy all buffer, including past any null terminators
@@ -56,12 +60,24 @@ void ClientHandler::handle_client_requests(int client_sockfd, CacheManager& cach
 
             while (true) { //could have mutliple http requests in curr_message at once
                 HttpRequest request;
-                if (!request.parse_request(curr_message)) {
-                    
+
+                //if string curr_message doesn't contain full http message yet, returns false.
+                //Returns true otherwise, even if malformed message. 
+                //if gets valid http message, parses the message fully and removes from curr_message
+                bool res = request.parse_request(curr_message);
+                if (!res) {
+                    break; //need to recv again
                 }
 
+                //if request.parse_request determined malformed request (error code 4xx)
+                //then request.client_error_code will be set and handler should send
+                //error response to client AND THEN WE SHOULD CLOSE CONNECTION (return from handle_client_requests)                       
                 RequestHandler handler(cache);
-                handler.handle_request(request, client_sockfd);
+                int cont = handler.handle_request(request, client_sockfd);
+                if (cont == -1) { //close connection now
+                    force_connection_close = true;
+                    break; //dont care about handling anything else from buffer
+                }
 
             }
 

@@ -14,6 +14,8 @@ private:
     std::string body;
 
 public:
+    int client_error_code; //if not 0, indicates client error in request (4xx)
+
     HttpRequest() = default;
     bool parse_request(std::string& request_str);
     std::string get_method() const;

@@ -6,7 +6,10 @@
 
 RequestHandler::RequestHandler(CacheManager& cache) : cache(cache) {}
 
-void RequestHandler::handle_request(HttpRequest& request, int client_socket) {
+//this function will also handle responding to malformed requests with error code.
+//will return -1 if we should close socket connection to client after handling (right now just for malformed request). 
+//returns 0 otherwise (keep connection open)
+int RequestHandler::handle_request(HttpRequest& request, int client_socket) {
     std::string method = request.get_method();
     std::string url = request.get_url();
 
@@ -19,7 +22,7 @@ void RequestHandler::handle_request(HttpRequest& request, int client_socket) {
                 send(client_socket, response_str.c_str(), response_str.length(), 0);
                 Logger().log_cache_status(0, "in cache, valid");
                 Logger().log_response(0, cached_response->get_status_line());
-                return;
+                return 0;
             }
         }
         Logger().log_cache_status(0, "not in cache");
@@ -28,7 +31,7 @@ void RequestHandler::handle_request(HttpRequest& request, int client_socket) {
     // handle CONNECT  (HTTPS tunnel)
     if (method == "CONNECT") {
         handle_connect(request, client_socket);
-        return;
+        return 0;
     }
 
     // other requests（including POST）transfer directly
@@ -43,6 +46,7 @@ void RequestHandler::handle_request(HttpRequest& request, int client_socket) {
     }
 
     Logger().log_response(0, response.get_status_line());
+    return 0;
 }
 
 HttpResponse RequestHandler::forward_request(HttpRequest& request) {
