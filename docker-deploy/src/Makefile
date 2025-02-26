@@ -1,8 +1,8 @@
 CC = g++
 CFLAGS = -O3
 LIBS = -lpthread
-DEPS = ProxyServer.h ClientHandler.h CacheManager.h
-OBJECTS = ProxyServer.o ClientHandler.o CacheManager.o proxy.o
+DEPS = ClientHandler.h FakeCache.h HttpRequest.h HttpResponse.h Logger.h ProxyServer.h RequestHandler.h 
+OBJECTS = ClientHandler.o FakeCache.o HttpRequest.o HttpResponse.o Logger.o ProxyServer.o RequestHandler.o proxy.o
 
 all: proxy
 

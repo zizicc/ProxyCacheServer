@@ -1,7 +1,7 @@
 #ifndef CLIENT_HANDLER_H
 #define CLIENT_HANDLER_H
 
-#include "CacheManager.h"
+#include "FakeCache.h"
 #include <atomic>
 
 class ClientHandler {

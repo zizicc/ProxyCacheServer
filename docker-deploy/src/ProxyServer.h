@@ -2,8 +2,9 @@
 #define PROXY_SERVER_H
 
 #include <vector>
+#include <list>
 #include "ClientHandler.h"
-#include "CacheManager.h"
+#include "FakeCache.h"
 #include <thread>
 #include <mutex>
 #include <atomic>
@@ -21,11 +22,11 @@ public:
 
     // std::vector<ClientHandler> clients; 
     // std::mutex clients_lock;
-    std::vector<std::thread> client_threads;
+    std::list<std::thread> client_threads; //changed to list to avoid iterator invalidation
     std::mutex client_threads_lock;
     std::atomic<bool> stop_flag; //flag to signal threads to shutdown
 
-    std::queue<std::vector<std::thread>::iterator> reaper_q; //queue for finished threads, reaper thread will join them
+    std::queue<std::list<std::thread>::iterator> reaper_q; //queue for finished threads, reaper thread will join them
     std::mutex reaper_q_lock;
     std::condition_variable reaper_q_cv;
     std::thread reaper_thread;
@@ -35,7 +36,7 @@ public:
     ProxyServer(int proxy_server_port);
     ~ProxyServer();
 
-    void handle_client(int client_sockfd, std::vector<std::thread>::iterator it);
+    void handle_client(int client_sockfd, std::list<std::thread>::iterator it);
     void cleanup_threads();
     void start();
 };

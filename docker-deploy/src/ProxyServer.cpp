@@ -60,12 +60,12 @@ ProxyServer::~ProxyServer() { //might need to declare noexcept, idk?
 }
 
 //iterator needed so when thread finishes it can add itself to reaper queue
-void ProxyServer::handle_client(int client_sockfd, std::vector<std::thread>::iterator it) {
+void ProxyServer::handle_client(int client_sockfd, std::list<std::thread>::iterator it) {
     //enter here with a worker thread
 
     ClientHandler handler; //thread creates client handler
     handler.handle_client_requests(client_sockfd, cache, stop_flag); //returns when thread finishes (connection closed or server shutdown)
-
+    
     close(client_sockfd);
 
     //when a thread finishes, put itself in reaper queue
@@ -75,7 +75,6 @@ void ProxyServer::handle_client(int client_sockfd, std::vector<std::thread>::ite
 
     //signal reaper thread to wake up
     reaper_q_cv.notify_one();
-
     //lock guard destructed, lock released
     //thread now finished executing
 }
@@ -91,7 +90,8 @@ void ProxyServer::cleanup_threads() {
 
         //we own lock, can clean up
         while (!reaper_q.empty()) {
-            std::vector<std::thread>::iterator it = reaper_q.front();
+            std::list<std::thread>::iterator it = reaper_q.front();
+
             reaper_q.pop();
 
             if (it->joinable()) { //join the thread
@@ -99,6 +99,7 @@ void ProxyServer::cleanup_threads() {
             }
 
             //can now remove thread from client_threads (destructs it) since join called
+            std::cout << "cleaned a thread :D" << std::endl;
             std::lock_guard<std::mutex> guard(client_threads_lock);
             client_threads.erase(it);
         } //client threads lock guard released

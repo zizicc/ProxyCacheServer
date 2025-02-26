@@ -7,20 +7,16 @@
 
 class CacheManager {
 private:
-    std::unordered_map<std::string, std::shared_ptr<HttpResponse>> cache;
 
 public:
-    bool is_in_cache(const std::string& url) {
-        return cache.find(url) != cache.end();
-    }
+    std::unordered_map<std::string, std::shared_ptr<HttpResponse>> cache;
 
-    std::shared_ptr<HttpResponse> get_cached_response(const std::string& url) {
-        return is_in_cache(url) ? cache[url] : nullptr;
-    }
+    bool is_in_cache(const std::string& url);
 
-    void store_response(const std::string& url, std::shared_ptr<HttpResponse> response) {
-        cache[url] = response;
-    }
+    std::shared_ptr<HttpResponse> get_cached_response(const std::string& url);
+
+    void store_response(const std::string& url, std::shared_ptr<HttpResponse> response);
+    
 };
 
 #endif
