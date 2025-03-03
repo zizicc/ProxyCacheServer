@@ -450,3 +450,15 @@ std::string HttpRequest::serialize() const {
     request << "\r\n" << body;
     return request.str();
 }
+
+std::string HttpRequest::get_http_version() const {
+    return http_version;
+}
+
+bool HttpRequest::has_header(const std::string& key) const {
+    return headers.find(key) != headers.end();
+}
+
+void HttpRequest::add_header(const std::string& key, const std::string& value) {
+    headers[key] = value;
+}
