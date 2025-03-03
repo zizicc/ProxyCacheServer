@@ -1,7 +1,7 @@
 #ifndef CLIENT_HANDLER_H
 #define CLIENT_HANDLER_H
 
-#include "FakeCache.h"
+#include "CacheManager.h"
 #include <atomic>
 
 class ClientHandler {
@@ -11,7 +11,7 @@ public:
     ClientHandler();
     ~ClientHandler();
 
-    void handle_client_requests(int client_sockfd, CacheManager& cache, std::atomic<bool>& stop_flag);
+    void handle_client_requests(int client_sockfd, CacheManager& cache, std::atomic<bool>& stop_flag, std::atomic_int& curr_request_id, std::string& client_ip);
 };
 
 

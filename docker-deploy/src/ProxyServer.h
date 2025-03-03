@@ -4,7 +4,7 @@
 #include <vector>
 #include <list>
 #include "ClientHandler.h"
-#include "FakeCache.h"
+#include "CacheManager.h"
 #include <thread>
 #include <mutex>
 #include <atomic>
@@ -33,10 +33,12 @@ public:
 
     CacheManager cache;
 
+    std::atomic_int curr_request_id;
+
     ProxyServer(int proxy_server_port);
     ~ProxyServer();
 
-    void handle_client(int client_sockfd, std::list<std::thread>::iterator it);
+    void handle_client(int client_sockfd, std::list<std::thread>::iterator it, std::string client_ip);
     void cleanup_threads();
     void start();
 };

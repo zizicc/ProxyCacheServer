@@ -7,9 +7,10 @@
 #include <unistd.h>
 #include <exception>
 #include <cstring>
+#include <arpa/inet.h>
 
 //if object construction fails (cant create socket or bind it), throw a runtime exception
-ProxyServer::ProxyServer(int proxy_server_port) : proxy_server_port(proxy_server_port), stop_flag(false) { //im guessing cache has some default initialization that doesn't require args
+ProxyServer::ProxyServer(int proxy_server_port) : proxy_server_port(proxy_server_port), stop_flag(false), curr_request_id(0) { //im guessing cache has some default initialization that doesn't require args
     listening_sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (listening_sockfd < 0) {
         throw std::runtime_error("Failed to create Proxy's listener socket");
@@ -60,11 +61,11 @@ ProxyServer::~ProxyServer() { //might need to declare noexcept, idk?
 }
 
 //iterator needed so when thread finishes it can add itself to reaper queue
-void ProxyServer::handle_client(int client_sockfd, std::list<std::thread>::iterator it) {
+void ProxyServer::handle_client(int client_sockfd, std::list<std::thread>::iterator it, std::string client_ip) {
     //enter here with a worker thread
 
     ClientHandler handler; //thread creates client handler
-    handler.handle_client_requests(client_sockfd, cache, stop_flag); //returns when thread finishes (connection closed or server shutdown)
+    handler.handle_client_requests(client_sockfd, cache, stop_flag, curr_request_id, client_ip); //returns when thread finishes (connection closed or server shutdown)
     
     close(client_sockfd);
 
@@ -135,11 +136,17 @@ void ProxyServer::start() {
             continue; //don't exit here, try to accept again
         }
 
+        char ip_src[64];
+        sprintf(ip_src, "%s", inet_ntoa(client_address.sin_addr)); //convert ip of client to string
+        std::string client_ip (ip_src);
+
+        std::cout << "Connection established with client ip: " << client_ip << std::endl;
+
         //create new thread to call handle_client()
         std::lock_guard<std::mutex> guard(client_threads_lock); //lock guard to ensure client_threads_lock is released either when guard goes out of scope or exception in creating new thread
         client_threads.emplace_back(); //add a default-constructed thread
         auto it = --client_threads.end(); //get iterator after insertion
-        *it = std::thread([this, client_connection_sockfd, it]() { handle_client(client_connection_sockfd, it); });
+        *it = std::thread([this, client_connection_sockfd, it, client_ip]() { handle_client(client_connection_sockfd, it, client_ip); });
         //client_threads.emplace_back(&ProxyServer::handle_client, this, client_connection_sockfd, --client_threads.end()); //add thread to list of all active threads
     }
     

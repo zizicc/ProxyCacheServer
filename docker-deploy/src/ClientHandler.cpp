@@ -19,7 +19,7 @@ ClientHandler::~ClientHandler() {
 
 }
 
-void ClientHandler::handle_client_requests(int client_sockfd, CacheManager& cache, std::atomic<bool>& stop_flag) {
+void ClientHandler::handle_client_requests(int client_sockfd, CacheManager& cache, std::atomic<bool>& stop_flag, std::atomic_int& curr_request_id, std::string& client_ip) {
     std::unordered_set<std::string> valid_methods = {"GET", "POST"};
 
     int buffer_read_size = 4096;
@@ -69,11 +69,12 @@ void ClientHandler::handle_client_requests(int client_sockfd, CacheManager& cach
                     break; //need to recv again
                 }
 
+                int request_id = curr_request_id++;
                 //if request.parse_request determined malformed request (error code 4xx)
                 //then request.client_error_code will be set and handler should send
                 //error response to client AND THEN WE SHOULD CLOSE CONNECTION (return from handle_client_requests)                       
                 RequestHandler handler(cache);
-                int cont = handler.handle_request(request, client_sockfd);
+                int cont = handler.handle_request(request, client_sockfd, curr_request_id, client_ip);
                 if (cont == -1) { //close connection now
                     force_connection_close = true;
                     break; //dont care about handling anything else from buffer
