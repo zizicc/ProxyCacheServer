@@ -18,11 +18,26 @@ bool HttpResponse::parse_response(const std::string& response_str) {
     std::istringstream response_stream(response_str);
     std::string line;
 
-    // parse statue line
     if (!std::getline(response_stream, line)) {
         return false;
     }
-    status_line = line;
+    
+    // Ensure we correctly extract the **entire** HTTP status line
+    std::istringstream line_stream(line);
+    std::string http_version, status_code, status_message;
+    line_stream >> http_version >> status_code;
+    std::getline(line_stream, status_message);
+    
+    // Remove potential leading spaces in status_message
+    status_message.erase(0, status_message.find_first_not_of(" "));
+    
+    // Reconstruct the status line properly
+    status_line = http_version + " " + status_code + " " + status_message;
+    
+    // Trim any trailing CR (if exists)
+    if (!status_line.empty() && status_line.back() == '\r') {
+        status_line.pop_back();
+    }
 
     // parse headers
     while (std::getline(response_stream, line) && line != "\r") {
@@ -30,16 +45,33 @@ bool HttpResponse::parse_response(const std::string& response_str) {
         if (pos != std::string::npos) {
             std::string key = line.substr(0, pos);
             std::string value = line.substr(pos + 2);
+            // Trim any trailing newlines or carriage returns from value
+            if (!value.empty() && (value.back() == '\r' || value.back() == '\n')) {
+                value.pop_back();
+            }
             headers[key] = value;
         }
     }
 
-    // parse body
+    // Parse body properly
     std::ostringstream body_stream;
+    bool first_line = true;
+
     while (std::getline(response_stream, line)) {
-        body_stream << line << "\n";
+        if (!first_line) {
+            body_stream << "\n";  // Preserve newlines **except the last one**
+        }
+        body_stream << line;
+        first_line = false;
     }
+
+    // Assign parsed body
     body = body_stream.str();
+
+    // Trim any trailing newlines (to match expected output)
+    while (!body.empty() && (body.back() == '\r' || body.back() == '\n')) {
+        body.pop_back();
+    }
 
     // check if the response is cachable
     if (headers.find("Cache-Control") != headers.end()) {
@@ -63,6 +95,16 @@ bool HttpResponse::parse_response(const std::string& response_str) {
 }
 
 bool HttpResponse::is_cacheable() const {
+    if (status_line.find("200 OK") == std::string::npos) return false;  // Only cache 200 OK
+
+    if (headers.find("Cache-Control") != headers.end()) {
+        std::string cache_control = headers.at("Cache-Control");
+        if (cache_control.find("no-store") != std::string::npos) return false;  // No caching allowed
+        if (cache_control.find("private") != std::string::npos) return false;   // Only for a single user
+        if (cache_control.find("must-revalidate") != std::string::npos) requires_validation = true;
+    }
+
+    if (status_line.find("206 Partial Content") != std::string::npos) return false; // Don't cache partial responses
     return expiry_time > std::time(nullptr);
 }
 

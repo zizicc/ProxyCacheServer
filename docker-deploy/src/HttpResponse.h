@@ -11,7 +11,7 @@ private:
     std::unordered_map<std::string, std::string> headers;
     std::string body;
     time_t expiry_time;
-    bool requires_validation;
+    mutable bool requires_validation;
 
 public:
     HttpResponse();
