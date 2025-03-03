@@ -39,7 +39,7 @@ void ClientHandler::handle_client_requests(int client_sockfd, CacheManager& cach
             if (bytes_read < 0) {
                 //means something (i think error)
             } else if (bytes_read == 0) {
-                //means something else (i think closed connection)
+                //client closed connection
                 std::cout << "Client closed connection" << std::endl;
                 break;
             }

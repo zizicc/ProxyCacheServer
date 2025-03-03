@@ -158,6 +158,8 @@ bool HttpRequest::parse_request(std::string& request_str) {
     //dont really know how to validate url?
 
 
+    bool has_chunked = false; //used for later
+
     //PARSE HEADERS
     //header-field   = field-name ":" OWS field-value OWS
     // field-name     = token
@@ -195,6 +197,9 @@ bool HttpRequest::parse_request(std::string& request_str) {
         //parse field-value to remove any leading or trailing OWS (optional whitespace)
         //if all of field-value is OWS, field-value will just be an empty string indicating no field value 
         trim_field_value(value);
+        if (key == "Transfer-Encoding" && value == "chunked") {
+            has_chunked = true;
+        }
 
         if (headers.find(key) != headers.end()) { //found duplicate header field names
             if (!can_duplicate_field_name(key)) { //error, cant have multiple of this header field name
@@ -238,17 +243,178 @@ bool HttpRequest::parse_request(std::string& request_str) {
         return true;
     }
 
-    // parse body if there is one //TODO: BODY PARSING
-    // std::ostringstream body_stream;
-    // while (std::getline(request_stream, line)) {
-    //     body_stream << line << "\n";
-    // }
-    // body = body_stream.str();
+    // parse body if there is one
 
+    //If a message is received with both a Transfer-Encoding and a
+    // Content-Length header field, the Transfer-Encoding overrides the
+    // Content-Length.
+    if (headers.find("Content-Length") != headers.end() && headers.find("Transfer-Encoding") != headers.end()) { //bad to have both
+        headers.erase("Content-Length");
+    }
+
+    
+    if (headers.find("Content-Length") != headers.end()) { //content length
+        try {
+            uint32_t len = stoul(headers["Content-Length"]);
+            int bodyStart = chars_read;
+            if (bodyStart + len > request_str.length()) {
+                //not enough data yet to read full body, need more recv;
+                return false;
+            }
+            body = request_str.substr(bodyStart, len); //set body field of HttpRequest
+            chars_read += len;
+            
+        } catch (...) { //catch invalid content-length field values
+            client_error_code = 400;
+            std::cout << "error 13" << std::endl;
+            return true;
+        }
+
+        std::cout << "received content length, decoded body to be: " << body << std::endl;
+
+    } else if (headers.find("Transfer-Encoding") != headers.end()) { //chunked transfer encoding
+        //According to RFC:
+        //    If a Transfer-Encoding header field
+        //    is present in a request and the chunked transfer coding is not
+        //    the final encoding, the message body length cannot be determined
+        //    reliably; the server MUST respond with the 400 (Bad Request)
+        //    status code and then close the connection.
+        if (!has_chunked) { //has transfer encoding but chunked isnt one of them
+            client_error_code = 400;
+            std::cout << "error 14" << std::endl;
+            return true;
+        }
+
+        uint32_t len = 0;
+        int bodyStart = chars_read;
+        int curr_ptr = bodyStart;
+
+        while (true) {
+            size_t line_end;
+            if ((line_end = request_str.find("\r\n", curr_ptr)) == std::string::npos) {
+                return false; //havent received the end of a chunked body line, more recv
+            }
+
+            chars_read += line_end - curr_ptr + 2;
+            line = request_str.substr(curr_ptr, line_end - curr_ptr);
+            curr_ptr = chars_read;
+
+            std::string chunk_size_str;
+            if (line.find(';') != std::string::npos) { //there are chunk extensions
+                chunk_size_str = line.substr(0, line.find(';'));
+            } else {
+                chunk_size_str = line;
+            }
+
+            uint32_t chunk_size = std::stoul(chunk_size_str, nullptr, 16);
+
+            if (chunk_size <= 0) { //this is "last-chunk", end of chunks
+                break;
+            }
+
+            if (curr_ptr + chunk_size + 2 > request_str.length()) {
+                return false; //havent received end of chunk data line, more recv
+            }
+
+            if (request_str.substr(curr_ptr + chunk_size, 2) != "\r\n") { //ill format
+                client_error_code = 400;
+                std::cout << "error 15" << std::endl;
+                return true;
+            }
+
+            body += request_str.substr(curr_ptr, chunk_size); //append chunk data to decoded body
+            chars_read += chunk_size + 2;
+            curr_ptr = chars_read;
+            len += chunk_size;
+        }
+
+        //read optional trailer part
+        while (true) {
+            size_t line_end;
+            if ((line_end = request_str.find("\r\n", curr_ptr)) == std::string::npos) {
+                std::cout << "havent received either a full trailer-part line or crlf" << std::endl; 
+                return false; //havent received either a trailer-part or crlf, more recv
+            }
+
+            chars_read += line_end - curr_ptr + 2;
+            line = request_str.substr(curr_ptr, line_end - curr_ptr);
+            curr_ptr = chars_read;
+
+            if (line.empty()) { //final CRLF of chunked body, done now
+                break;
+            }
+
+            size_t pos = line.find(":");
+            if (pos == std::string::npos) { //no colon in a header field, bad. 400 response
+                client_error_code = 400;
+                std::cout << "error 16" << std::endl;
+                return true;
+            }
+
+            std::string key = line.substr(0, pos);
+            std::string value = line.substr(pos + 1); //remainder after colon
+
+                //A server MUST reject any received request message that contains
+                //whitespace between a header field-name and colon with a response code of 400
+                //also ensure field-name is valid token
+            if (!valid_field_name(key)) {
+                client_error_code = 400;
+                std::cout << "error 17" << std::endl;
+                return true;
+            }
+
+            //parse field-value to remove any leading or trailing OWS (optional whitespace)
+            //if all of field-value is OWS, field-value will just be an empty string indicating no field value 
+            trim_field_value(value);
+
+            // A sender MUST NOT generate a trailer that contains a field necessary
+            // for message framing (e.g., Transfer-Encoding and Content-Length),
+            // routing (e.g., Host), request modifiers (e.g., controls and
+            // conditionals in Section 5 of [RFC7231]), authentication (e.g., see
+            // [RFC7235] and [RFC6265]), response control data (e.g., see Section
+            // 7.1 of [RFC7231]), or determining how to process the payload (e.g.,
+            // Content-Encoding, Content-Type, Content-Range, and Trailer).
+            if (key == "Transfer-Encoding" || key == "Content-Length" || key == "Host" || key == "Content-Encoding" || 
+                key == "Content-Type" || key == "Content-Range" || key == "Trailer") {
+                client_error_code = 400;
+                std::cout << "error 18" << std::endl;
+                return true;
+            }
+
+            if (headers.find(key) != headers.end()) { //found duplicate header field names
+                if (!can_duplicate_field_name(key)) { //error, cant have multiple of this header field name
+                    client_error_code = 400;
+                    std::cout << "error 19" << std::endl;
+                    return true;
+                }
+
+                if (key != "Set-Cookie" && !value.empty()) { //cant combine set-cookie but exception, just move on and use 1st val
+                    headers[key] += ", " + value;
+                }
+
+            } else {
+                headers[key] = value;
+            }
+        }
+
+        //Content-Length := length
+        headers["Content-Length"] = len;
+
+        //Remove "chunked" from Transfer-Encoding
+        headers.erase("Transfer-Encoding");
+
+        //Remove Trailer from existing header fields
+        headers.erase("Trailer");
+
+        std::cout << "received chunked encoding, decoded body to be: " << body << std::endl;
+
+    } else { //message body length = 0 since none of above 2 headers
+        std::cout << "received message body length 0" << std::endl;
+    }
 
     //if we've gotten here we have a valid http request, remove from string request_str
     std::cout << "no errors parsing" << std::endl;
-    request_str = ""; //TODO: MAKE IT SO YOU ONLY REMOVE CURRENT HTTP REQUEST FROM REQUEST_STR
+    request_str.erase(0, chars_read); //REMOVE CURRENT HTTP REQUEST FROM REQUEST_STR
     return true;
 }
 
