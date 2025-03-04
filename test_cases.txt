@@ -1,0 +1,124 @@
+Test 1: Normal GET Request (Should Cache Response)
+Send:
+GET http://www.google.com/ HTTP/1.1
+Host: www.google.com
+
+Expect:
+100: "GET http://www.google.com/ HTTP/1.1" from 172.18.0.1 @ <time>
+100: not in cache
+100: Requesting "GET http://www.google.com/ HTTP/1.1" from www.google.com
+100: Received "HTTP/1.1 200 OK" from www.google.com
+100: cached, expires at <expiration_time>
+100: Responding "HTTP/1.1 200 OK"
+
+
+
+Test 2: GET Request for Cached Resource
+Send: Same request as Test 1, after caching.
+Expect:
+101: "GET http://www.google.com/ HTTP/1.1" from 172.18.0.1 @ <time>
+101: in cache, valid
+101: Responding "HTTP/1.1 200 OK"
+
+
+
+Test 3: Custom Mocked GET Response (Cache-Control, ETag, Last-Modified)
+Setup: Use Mocky.io to generate a response with:
+Cache-Control: max-age=60
+ETag: "mock123"
+Last-Modified: Wed, 21 Oct 2023 07:28:00 GMT
+Send:
+GET http://www.mocky.io/your-mock-url HTTP/1.1
+Host: www.mocky.io
+
+Expect:
+
+102: "GET http://www.mocky.io/your-mock-url HTTP/1.1" from 172.18.0.1 @ <time>
+102: not in cache
+102: Requesting "GET ..." from www.mocky.io
+102: Received "HTTP/1.1 200 OK" from www.mocky.io
+102: NOTE Cache-Control: max-age=60
+102: NOTE ETag: "mock123"
+102: NOTE Last-Modified: Wed, 21 Oct 2023 07:28:00 GMT
+102: cached, expires at <expiration_time>
+102: Responding "HTTP/1.1 200 OK"
+
+
+Test 4: POST Request (Should Not Cache, Use Httpbin)
+Send:
+
+POST http://httpbin.org/forms/post HTTP/1.1
+Host: httpbin.org
+Content-Length: 9
+
+test=123
+
+Expect:
+
+103: "POST http://httpbin.org/forms/post HTTP/1.1" from 172.18.0.1 @ <time>
+103: Requesting "POST ..." from httpbin.org
+103: Received "HTTP/1.1 200 OK" from httpbin.org
+103: Responding "HTTP/1.1 200 OK"
+
+
+
+Test 5: CONNECT Request (HTTPS Tunnel to Google)
+Send:
+
+CONNECT www.google.com:443 HTTP/1.1
+Host: www.google.com
+
+Expect:
+
+104: "CONNECT www.google.com:443 HTTP/1.1" from 172.18.0.1 @ <time>
+104: Requesting "CONNECT ..." from www.google.com
+104: Responding "HTTP/1.1 200 OK"
+104: Tunnel closed
+
+
+Test 6: Malformed HTTP Request (Should Return 400 Bad Request)
+	•	Send:
+
+GET / HTTP/1.1
+Invalid-Header
+
+Expect:
+
+105: ERROR Malformed request
+105: Responding "HTTP/1.1 400 Bad Request"
+
+
+
+Test 7: Chunked Transfer Encoding Test
+URL: http://www.httpwatch.com/httpgallery/chunked/chunkedimage.aspx
+Expect:
+
+106: not cacheable because it is chunked
+
+
+Test 8: Cache Expiry Test (max-age=0)
+URL: http://www.artsci.utoronto.ca/futurestudents
+Expect:
+
+107: in cache, but expired at <time>
+107: Requesting "GET ..." from www.artsci.utoronto.ca
+
+
+Test 9: Cache Poisoning Attempt
+Step 1: Send GET http://www.google.com/ → Proxy caches 200 OK response.
+Step 2: Send a modified response with the same ETag but different content.
+Step 3: Send GET again.
+
+Expect:
+
+108: in cache, requires validation
+108: Requesting "GET ..." from www.google.com
+
+
+
+Test 10: Huge POST Request (Should Limit Size)
+Send: A POST request with Content-Length: 100000000 (100MB).
+Expect:
+
+109: ERROR Payload too large
+109: Responding "HTTP/1.1 413 Payload Too Large"

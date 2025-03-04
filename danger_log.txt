@@ -1,0 +1,14 @@
+1. Multi-threading Risks
+Possible deadlocks so that pthread_mutex_lock() is used, but some error cases might miss unlock, making the proxy stuck.
+
+2. HTTP Security Issues
+CONNECT method allows any target so that Hackers can use it to access private networks (SSRF attack).
+No limit on Content-Length in POST so that a large request can crash the proxy (DoS attack).
+Cache poisoning risk, like same ETag, different content. So proxy may serve fake or malicious data.
+
+3. Error Handling Issues
+Not handling recv() return 0 properly so that it may cause socket leaks, making the proxy slow over time.
+Ignoring build_client() failure so that the proxy may send requests to closed sockets, causing errors.
+
+4. Logging & Privacy Issues
+Logs contain sensitive user data so that proxy.log may leak passwords, API keys, or session tokens.
