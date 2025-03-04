@@ -6,6 +6,29 @@
 #include <unistd.h>
 #include <sstream>
 
+//returns 0 on success, -1 on error
+int RequestHandler::reliable_send(int sockfd, const char* message, size_t len, int request_id) {
+    int remaining = len;
+    int sent;
+    const char* curr_ptr = message;
+
+    Logger& logger = Logger::get_instance();
+
+    while (remaining > 0) {
+        sent = send(sockfd, curr_ptr, remaining, 0);
+
+        if (sent < 0) {
+            logger.log_error(request_id, "A send returned -1, closing connection.");
+            return -1;
+        }
+
+        remaining -= sent;
+        curr_ptr += sent;
+    }
+
+    return 0;
+}
+
 RequestHandler::RequestHandler(CacheManager& cache) : cache(cache) {}
 
 //this function will also handle responding to malformed requests with error code.
@@ -20,9 +43,10 @@ int RequestHandler::handle_request(HttpRequest& request, int client_socket, int 
 
     // Handle malformed request
     if (request.client_error_code != 0) {
-        std::string error_response = "HTTP/1.1 " + std::to_string(request.client_error_code) + " Bad Request\r\nConnection: close\r\n\r\n";
-        send(client_socket, error_response.c_str(), error_response.length(), 0);
         logger.log_error(request_id, "Malformed request received, closing connection.");
+
+        std::string error_response = "HTTP/1.1 " + std::to_string(request.client_error_code) + " Bad Request\r\nConnection: close\r\n\r\n";
+        reliable_send(client_socket, error_response.c_str(), error_response.length(), request_id); //dont need result, closing regardless
         return -1;
     }
 
@@ -44,12 +68,17 @@ int RequestHandler::handle_request(HttpRequest& request, int client_socket, int 
                     HttpResponse response = forward_request(request, request_id);
                     if (response.get_status_line().find("304 Not Modified") != std::string::npos) {
                         logger.log_response(request_id, "HTTP/1.1 304 Not Modified (Using cached copy)");
-                        send(client_socket, cached_response->serialize().c_str(), cached_response->serialize().length(), 0);
+                        if (reliable_send(client_socket, cached_response->serialize().c_str(), cached_response->serialize().length(), request_id) < 0) {
+                            return -1;
+                        }
+
                         return 0;
-                    }
+                    } //DO WE NEED AN ELSE??
                 } else {
                     logger.log_cache_status(request_id, "in cache, valid");
-                    send(client_socket, cached_response->serialize().c_str(), cached_response->serialize().length(), 0);
+                    if (reliable_send(client_socket, cached_response->serialize().c_str(), cached_response->serialize().length(), request_id) < 0) {
+                        return -1;
+                    }
                     logger.log_response(request_id, cached_response->get_status_line());
                     return 0;
                 }
@@ -66,7 +95,9 @@ int RequestHandler::handle_request(HttpRequest& request, int client_socket, int 
     // Forward other requests (including POST)
     HttpResponse response = forward_request(request, request_id);
     std::string response_str = response.serialize();
-    send(client_socket, response_str.c_str(), response_str.length(), 0);
+    if (reliable_send(client_socket, response_str.c_str(), response_str.length(), request_id) < 0) {
+        return -1;
+    }
 
     // Log response to client
     logger.log_response(request_id, response.get_status_line());
@@ -96,40 +127,77 @@ HttpResponse RequestHandler::forward_request(HttpRequest& request, int request_i
         return HttpResponse(); // 502 Bad Gateway
     }
 
-    // Create and connect socket
-    sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if (sockfd < 0 || connect(sockfd, res->ai_addr, res->ai_addrlen) != 0) {
+    struct addrinfo* it = NULL;
+    for (it = res; it != NULL; it = it->ai_next) {
+        sockfd = socket(it->ai_family, it->ai_socktype, it->ai_protocol);
+        if (sockfd == -1) //failed socket creation using current address structure, try next one
+            continue;
+
+        if (connect(sockfd, it->ai_addr, it->ai_addrlen) != -1) //successful connection to ringmaster
+            break;
+
+        close(sockfd); //failed connect using current address structure, try next one
+    }
+
+    freeaddrinfo(res);
+
+    if (it == NULL) { //tried all addresses, none succeeded
         logger.log_error(request_id, "Failed to connect to server: " + server);
-        freeaddrinfo(res);
         return HttpResponse(); // 502 Bad Gateway
     }
-    
-    freeaddrinfo(res);
 
 
     // Log only the request line (first line of serialized request)
-    std::istringstream request_stream(request.serialize());
-    std::string request_line;
-    std::getline(request_stream, request_line);
+    // std::istringstream request_stream(request.serialize());
+    // std::string request_line;
+    // std::getline(request_stream, request_line);
 
     logger.log_forward_request(request_id, request.get_method() + " " + request.get_url() + " " + request.get_http_version(), request.get_host());
 
-    // Send request
+    //Send request
     std::string request_str = request.serialize();
-    send(sockfd, request_str.c_str(), request_str.length(), 0);
-
-    // Receive response from server
-    char buffer[8192];
-    int bytes_received = recv(sockfd, buffer, sizeof(buffer), 0);
-    if (bytes_received <= 0) {
-        logger.log_error(request_id, "Failed to receive response from server.");
+    if (reliable_send(sockfd, request_str.c_str(), request_str.length(), request_id) < 0) {
+        logger.log_error(request_id, "Failed to send data to server.");
         close(sockfd);
         return HttpResponse(); // 502 Bad Gateway
     }
 
-    // Parse response
+    //Receive response from server
+    int buffer_read_size = 8192;
+    char buffer[buffer_read_size];
+    std::string curr_message;
     HttpResponse response;
-    response.parse_response(std::string(buffer, bytes_received));
+
+    while (true) {
+        int bytes_read = recv(sockfd, buffer, buffer_read_size, 0);
+
+        if (bytes_read < 0) {
+            logger.log_error(request_id, "Failed to receive response from server.");
+            close(sockfd);
+            return HttpResponse(); //502 Bad Gateway
+        } else if (bytes_read == 0) { //server has closed connection and on last iteration we did not have full http response
+            logger.log_error(request_id, "Failed to receive response from server.");
+            close(sockfd);
+            return HttpResponse(); //502 Bad Gateway
+        }
+
+        curr_message += std::string(buffer, bytes_read);
+
+        //try to parse a single response
+        //Returns true even if malformed response.
+        HttpResponse response2;
+        bool res = response2.parse_response(curr_message);
+        if (res) {
+            if (response2.parse_error) { //if parse error, just use default 502 bad gateway
+                logger.log_error(request_id, "Received invalid response from server.");
+                close(sockfd);
+                return HttpResponse(); //502 Bad Gateway
+            }
+
+            response = response2;
+            break; //received full response, done and no need to recv again
+        }
+    }
 
     // Log received response
     logger.log_received_response(request_id, response.get_status_line(), server);

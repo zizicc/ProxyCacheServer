@@ -15,6 +15,7 @@ private:
 public:
     explicit RequestHandler(CacheManager& cache);
     int handle_request(HttpRequest& request, int client_socket, int request_id, const std::string& client_ip);
+    static int reliable_send(int sockfd, const char* message, size_t len, int request_id);
 };
 
 #endif

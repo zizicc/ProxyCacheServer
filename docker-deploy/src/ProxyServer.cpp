@@ -100,7 +100,6 @@ void ProxyServer::cleanup_threads() {
             }
 
             //can now remove thread from client_threads (destructs it) since join called
-            std::cout << "cleaned a thread :D" << std::endl;
             std::lock_guard<std::mutex> guard(client_threads_lock);
             client_threads.erase(it);
         } //client threads lock guard released
@@ -139,8 +138,6 @@ void ProxyServer::start() {
         char ip_src[64];
         sprintf(ip_src, "%s", inet_ntoa(client_address.sin_addr)); //convert ip of client to string
         std::string client_ip (ip_src);
-
-        std::cout << "Connection established with client ip: " << client_ip << std::endl;
 
         //create new thread to call handle_client()
         std::lock_guard<std::mutex> guard(client_threads_lock); //lock guard to ensure client_threads_lock is released either when guard goes out of scope or exception in creating new thread

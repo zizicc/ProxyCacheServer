@@ -5,7 +5,7 @@
 
 //ensure field name is valid token
 //also catches spaces between field-name and colon
-bool valid_field_name(const std::string& field) {
+bool HttpRequest::valid_field_name(const std::string& field) {
     if (field.empty()) return false;
 
     const std::string validSpecialChars = "!#$%&'*+-.^_`|~"; //allowed special chars besides a-z,0-9 in token
@@ -21,7 +21,7 @@ bool valid_field_name(const std::string& field) {
 
 //removes any leading or trailing OWS (space, tab) from field-value
 //result is an empty string if entire field-value is OWS
-void trim_field_value(std::string& value) {
+void HttpRequest::trim_field_value(std::string& value) {
     const std::string whitespace = " \t";
     size_t start = value.find_first_not_of(whitespace);
     if (start == std::string::npos) { //value is all spaces/tabs
@@ -40,7 +40,7 @@ void trim_field_value(std::string& value) {
         // header field is defined as a comma-separated list [i.e., #(values)]
         // or the header field is a well-known exception (as noted below).
 //This function checks if a field name we found to be duplicated across multiple headers is allowed
-bool can_duplicate_field_name(std::string& field_name) {
+bool HttpRequest::can_duplicate_field_name(std::string& field_name) {
     static const std::unordered_set<std::string> can_duplicate = { //found list here: https://stackoverflow.com/questions/52272217/which-http-headers-can-be-combined-in-a-list
         "A-IM",
         "Accept",
@@ -180,7 +180,7 @@ bool HttpRequest::parse_request(std::string& request_str) {
             //A server MUST reject any received request message that contains
             //whitespace between a header field-name and colon with a response code of 400
             //also ensure field-name is valid token
-        if (!valid_field_name(key)) {
+        if (!HttpRequest::valid_field_name(key)) {
             client_error_code = 400;
             std::cout << "error 7" << std::endl;
             return true;
@@ -196,13 +196,13 @@ bool HttpRequest::parse_request(std::string& request_str) {
 
         //parse field-value to remove any leading or trailing OWS (optional whitespace)
         //if all of field-value is OWS, field-value will just be an empty string indicating no field value 
-        trim_field_value(value);
+        HttpRequest::trim_field_value(value);
         if (key == "Transfer-Encoding" && value == "chunked") {
             has_chunked = true;
         }
 
         if (headers.find(key) != headers.end()) { //found duplicate header field names
-            if (!can_duplicate_field_name(key)) { //error, cant have multiple of this header field name
+            if (!HttpRequest::can_duplicate_field_name(key)) { //error, cant have multiple of this header field name
                 client_error_code = 400;
                 std::cout << "error 9" << std::endl;
                 return true;
@@ -270,7 +270,6 @@ bool HttpRequest::parse_request(std::string& request_str) {
             return true;
         }
 
-        std::cout << "received content length, decoded body to be: " << body << std::endl;
 
     } else if (headers.find("Transfer-Encoding") != headers.end()) { //chunked transfer encoding
         //According to RFC:
@@ -357,7 +356,7 @@ bool HttpRequest::parse_request(std::string& request_str) {
                 //A server MUST reject any received request message that contains
                 //whitespace between a header field-name and colon with a response code of 400
                 //also ensure field-name is valid token
-            if (!valid_field_name(key)) {
+            if (!HttpRequest::valid_field_name(key)) {
                 client_error_code = 400;
                 std::cout << "error 17" << std::endl;
                 return true;
@@ -365,7 +364,7 @@ bool HttpRequest::parse_request(std::string& request_str) {
 
             //parse field-value to remove any leading or trailing OWS (optional whitespace)
             //if all of field-value is OWS, field-value will just be an empty string indicating no field value 
-            trim_field_value(value);
+            HttpRequest::trim_field_value(value);
 
             // A sender MUST NOT generate a trailer that contains a field necessary
             // for message framing (e.g., Transfer-Encoding and Content-Length),
@@ -382,7 +381,7 @@ bool HttpRequest::parse_request(std::string& request_str) {
             }
 
             if (headers.find(key) != headers.end()) { //found duplicate header field names
-                if (!can_duplicate_field_name(key)) { //error, cant have multiple of this header field name
+                if (!HttpRequest::can_duplicate_field_name(key)) { //error, cant have multiple of this header field name
                     client_error_code = 400;
                     std::cout << "error 19" << std::endl;
                     return true;
@@ -406,10 +405,9 @@ bool HttpRequest::parse_request(std::string& request_str) {
         //Remove Trailer from existing header fields
         headers.erase("Trailer");
 
-        std::cout << "received chunked encoding, decoded body to be: " << body << std::endl;
 
     } else { //message body length = 0 since none of above 2 headers
-        std::cout << "received message body length 0" << std::endl;
+
     }
 
     //if we've gotten here we have a valid http request, remove from string request_str

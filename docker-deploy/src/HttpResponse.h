@@ -16,12 +16,14 @@ private:
 public:
     HttpResponse();
     explicit HttpResponse(const std::string& status);
-    bool parse_response(const std::string& response_str);
+    bool parse_response(std::string& response_str);
     bool is_cacheable() const;
     std::string get_header(const std::string& key) const;
     std::string get_status_line() const;
     std::string get_body() const;
     std::string serialize() const;
+
+    bool parse_error;
 };
 
 #endif

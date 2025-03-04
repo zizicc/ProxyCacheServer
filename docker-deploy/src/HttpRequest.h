@@ -29,6 +29,10 @@ public:
     bool has_header(const std::string& key) const;
     void add_header(const std::string& key, const std::string& value);
 
+    static bool valid_field_name(const std::string& field);
+    static void trim_field_value(std::string& value);
+    static bool can_duplicate_field_name(std::string& field_name);
+
 };
 
 #endif
