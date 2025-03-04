@@ -9,7 +9,6 @@
 #include <vector>
 #include <string>
 #include <sstream>
-#include <unordered_set>
 
 ClientHandler::ClientHandler() {
 
@@ -20,7 +19,6 @@ ClientHandler::~ClientHandler() {
 }
 
 void ClientHandler::handle_client_requests(int client_sockfd, CacheManager& cache, std::atomic<bool>& stop_flag, std::atomic_int& curr_request_id, std::string& client_ip) {
-    std::unordered_set<std::string> valid_methods = {"GET", "POST"};
 
     int buffer_read_size = 4096;
     char buffer[buffer_read_size];

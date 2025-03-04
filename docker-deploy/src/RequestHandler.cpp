@@ -213,27 +213,43 @@ void RequestHandler::handle_connect(HttpRequest& request, int client_socket, int
     struct addrinfo hints{}, *res;
     std::string server = request.get_host();
 
+    size_t pos = server.find(':');
+    if (pos != std::string::npos) {
+        server = server.substr(0, pos); //get only hostname no port
+    }
+
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
     // Resolve server address
     if (getaddrinfo(server.c_str(), "443", &hints, &res) != 0) {
         std::string error_response = "HTTP/1.1 502 Bad Gateway\r\n\r\n";
-        send(client_socket, error_response.c_str(), error_response.length(), 0);
+        reliable_send(client_socket, error_response.c_str(), error_response.length(), request_id);
         logger.log_error(request_id, "Failed to resolve HTTPS host: " + server);
         return;
     }
 
-    remote_socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if (remote_socket < 0 || connect(remote_socket, res->ai_addr, res->ai_addrlen) != 0) {
-        freeaddrinfo(res);
+    struct addrinfo* it = NULL;
+    for (it = res; it != NULL; it = it->ai_next) {
+        remote_socket = socket(it->ai_family, it->ai_socktype, it->ai_protocol);
+        if (remote_socket == -1) //failed socket creation using current address structure, try next one
+            continue;
+
+        if (connect(remote_socket, it->ai_addr, it->ai_addrlen) != -1) //successful connection to ringmaster
+            break;
+
+        close(remote_socket); //failed connect using current address structure, try next one
+    }
+
+    freeaddrinfo(res);
+
+    if (it == NULL) { //tried all addresses, none succeeded
         std::string error_response = "HTTP/1.1 502 Bad Gateway\r\n\r\n";
-        send(client_socket, error_response.c_str(), error_response.length(), 0);
+        reliable_send(client_socket, error_response.c_str(), error_response.length(), 0);
         logger.log_error(request_id, "Failed to establish HTTPS tunnel to " + server);
         return;
     }
 
-    freeaddrinfo(res);
 
     // Send 200 OK to client for tunnel establishment
     std::string success_response = "HTTP/1.1 200 Connection Established\r\n\r\n";
@@ -242,6 +258,7 @@ void RequestHandler::handle_connect(HttpRequest& request, int client_socket, int
     // Tunnel communication
     fd_set read_fds;
     char buffer[8192];
+    std::cout << "tunnel com starting for request " << request_id << std::endl;
 
     while (true) {
         FD_ZERO(&read_fds);
@@ -265,6 +282,8 @@ void RequestHandler::handle_connect(HttpRequest& request, int client_socket, int
             send(client_socket, buffer, bytes_received, 0);
         }
     }
+
+    std::cout << "tunnel com ending for request " << request_id << std::endl;
 
     close(remote_socket);
     logger.log_tunnel_closed(request_id);
