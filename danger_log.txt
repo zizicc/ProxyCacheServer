@@ -1,14 +1,42 @@
-1. Multi-threading Risks
-Possible deadlocks so that pthread_mutex_lock() is used, but some error cases might miss unlock, making the proxy stuck.
+Danger Log:
 
-2. HTTP Security Issues
-CONNECT method allows any target so that Hackers can use it to access private networks (SSRF attack).
-No limit on Content-Length in POST so that a large request can crash the proxy (DoS attack).
-Cache poisoning risk, like same ETag, different content. So proxy may serve fake or malicious data.
+1. HTTP Security Issues
+- CONNECT method allows any target so that Hackers can use it to access private networks.
+- No limit on Content-Length in POST so that a large request can crash the proxy (DoS attack).
+- Cache poisoning risk, like same ETag, different content. So proxy may serve fake or malicious data.
 
-3. Error Handling Issues
-Not handling recv() return 0 properly so that it may cause socket leaks, making the proxy slow over time.
-Ignoring build_client() failure so that the proxy may send requests to closed sockets, causing errors.
+2. Potential Issues From Receive Handling
+- In order to handle cases where a complete http request hasn't been received in one recv() from a socket, our receive handling
+continues to recv() until a double CRLF ("\r\n\r\n") is found to indicate the end of the header section which must be in any http request. 
+A string is used to keep track of what we have read so far from recv(), and since there are no limits on the size of data before the header end 
+a client may continue to send data without ever sending the header end. A malicious user may use this to make us waste lots of memory.
+- Junk data being sent over the socket from a client is not handled, and it will keep accumulating in a string that we try to parse for 
+http requests. Only when a http request is found will the junk data be removed, so if this never occurs then we may waste memory on junk data.
 
-4. Logging & Privacy Issues
-Logs contain sensitive user data so that proxy.log may leak passwords, API keys, or session tokens.
+3. Logging & Privacy Issues
+- Logs contain sensitive user data so that proxy.log may leak passwords, API keys, or session tokens.
+
+
+External Failure Handling:
+- Our proxy handles responding to client http requests with a 400 error code if the request is determined to be malformed based 
+on RFC7230. This includes incorrect request syntax, such as having an invalid request line, whitespace where it is not 
+allowed, duplicate header fields for fields that can't be duplicated, incorrect formatting with CRLFs, improper chunked transfer-encoding (including any potential issues with the optional trailer), etc. A 
+socket connection with a client is forcibly closed if a request is determined to be malformed as it can disrupt the processing of further requests sent over that socket (for keep-alive cases).
+- The proxy also handles responding to the client with a 502 error code (Bad Gateway) if it receives a malformed, corrupted, or invalid 
+response from the destination webserver, as specified by RFC7230. This includes much of the handling done for identifying 
+malformed client requests along with cases where the destination server cannot be contacted or resolved.
+- The proxy also handles forwarding error responses from the destination webserver back to the client.
+
+Exception Guarantees:
+Exceptions are caught using C++ try, catch, and throws throughout the code. In the case of an exception occurring, some guarantees we make include:
+
+For non program-ending exceptions:
+1. All locks are released (by using lock guards and unique locks)
+2. All socket fds get properly closed
+
+For program-ending exceptions:
+1. The guarantees made above for non program-ending exceptions
+2. All active threads get properly joined for graceful shutdown
+3. All necessary destructors are called through stack unwinding and all dynamically allocated memory is freed (through using shared pointers)
+
+Overall the proxy follows RAII principles

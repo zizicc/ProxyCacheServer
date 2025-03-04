@@ -19,13 +19,14 @@ This project implements an HTTP caching proxy server in C++. It intercepts HTTP 
 ```sh
 git clone <repository-url>
 cd <repository>
+cd docker-deploy
 sudo docker-compose up --build
 ```
 The proxy listens on port `12345`, logs are stored in `logs/`.
 
 ## Usage
 ### Configure Browser
-- Set proxy to `127.0.0.1:12345` in network settings.
+- Configure your browser to use a manual proxy configuration and input the hostname of the machine and port (12345) where the proxy is running. 
 
 ### Log Format
 ```plaintext
@@ -36,12 +37,6 @@ ID: Requesting "REQUEST" from SERVER
 ID: Received "RESPONSE" from SERVER
 ID: Responding "RESPONSE"
 ID: Tunnel closed
-```
-
-## Testing
-### Run Tests
-```sh
-make test
 ```
 
 ### Manual Tests
@@ -58,17 +53,6 @@ wget -e use_proxy=yes -e http_proxy=http://127.0.0.1:12345 http://www.example.co
 - **Multithreading**: Uses `std::thread`, synchronized cache with `std::mutex`.
 - **Design**: RAII, exception handling, modular components.
 
-## File Structure
-```plaintext
-├── src/            # Main implementation
-├── include/        # Header files
-├── test/           # Test cases
-├── logs/           # Log directory
-├── Dockerfile      # Docker build file
-├── docker-compose.yml
-├── Makefile        # Build automation
-├── README.md       # Documentation
-```
 
 ## Future Improvements
 - Support `PUT`, `DELETE`
