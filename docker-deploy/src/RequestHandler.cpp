@@ -86,6 +86,7 @@ int RequestHandler::handle_request(HttpRequest& request, int client_socket, int 
         }
     }
 
+
     // Handle HTTPS (CONNECT)
     if (method == "CONNECT") {
         handle_connect(request, client_socket, request_id);
@@ -107,6 +108,7 @@ int RequestHandler::handle_request(HttpRequest& request, int client_socket, int 
         cache.store_response(request_id, url, std::make_shared<HttpResponse>(response));
         logger.log_cache_status(request_id, "cached, expires at " + response.get_header("Expires"));
     }
+
 
     return 0;
 }
@@ -258,7 +260,6 @@ void RequestHandler::handle_connect(HttpRequest& request, int client_socket, int
     // Tunnel communication
     fd_set read_fds;
     char buffer[8192];
-    std::cout << "tunnel com starting for request " << request_id << std::endl;
 
     while (true) {
         FD_ZERO(&read_fds);
@@ -282,8 +283,6 @@ void RequestHandler::handle_connect(HttpRequest& request, int client_socket, int
             send(client_socket, buffer, bytes_received, 0);
         }
     }
-
-    std::cout << "tunnel com ending for request " << request_id << std::endl;
 
     close(remote_socket);
     logger.log_tunnel_closed(request_id);

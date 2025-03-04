@@ -91,7 +91,6 @@ bool HttpRequest::parse_request(std::string& request_str) {
         client_error_code = 400;
         //after return, requestHandler should close connection with client after sending error code
         //no need to clean up rest of buffer, all of it should be invalidated
-        std::cout << "error 1" << std::endl;
         // request_str.erase(0, headers_end + sizeof("\r\n\r\n")); //also erase invalid data up to headers_end
         return true;
     }
@@ -125,7 +124,6 @@ bool HttpRequest::parse_request(std::string& request_str) {
     //not enough request line elements or too many, do something about sending HTTP 400
     if (method.empty() || url.empty() || http_version.empty()) {
         client_error_code = 400;
-        std::cout << "error 2" << std::endl;
 
         return true;
     }
@@ -134,7 +132,6 @@ bool HttpRequest::parse_request(std::string& request_str) {
     //catches trailing whitespace
     if (http_version[http_version.length()-1] != '\r') {
         client_error_code = 400;
-        std::cout << "error 3" << std::endl;
 
         return true;
     } else {
@@ -144,14 +141,12 @@ bool HttpRequest::parse_request(std::string& request_str) {
     //handle invalid method, url, or http_version
     if (!((method == "GET") || (method == "POST") || (method == "CONNECT"))) {
         client_error_code = 400;
-        std::cout << "error 4" << std::endl;
         return true;
     }
 
     //also catches leading whitespace in http_version
     if (http_version != "HTTP/1.1") {
         client_error_code = 400;
-        std::cout << "error 5" << std::endl;
         return true;
     }
 
@@ -170,7 +165,6 @@ bool HttpRequest::parse_request(std::string& request_str) {
         size_t pos = line.find(":");
         if (pos == std::string::npos) { //no colon in a header field, bad. 400 response
             client_error_code = 400;
-            std::cout << "error 6" << std::endl;
             return true;
         }
 
@@ -182,13 +176,11 @@ bool HttpRequest::parse_request(std::string& request_str) {
             //also ensure field-name is valid token
         if (!HttpRequest::valid_field_name(key)) {
             client_error_code = 400;
-            std::cout << "error 7" << std::endl;
             return true;
         }
 
         if (value[value.length() - 1] != '\r') { //ensure field-value ends with CRLF
             client_error_code = 400;
-            std::cout << "error 8" << std::endl;
             return true;
         } else {
             value.erase(value.length()-1); //remove the CR
@@ -204,7 +196,6 @@ bool HttpRequest::parse_request(std::string& request_str) {
         if (headers.find(key) != headers.end()) { //found duplicate header field names
             if (!HttpRequest::can_duplicate_field_name(key)) { //error, cant have multiple of this header field name
                 client_error_code = 400;
-                std::cout << "error 9" << std::endl;
                 return true;
             }
 
@@ -226,9 +217,7 @@ bool HttpRequest::parse_request(std::string& request_str) {
     std::getline(request_stream, line);
     chars_read += line.length() + 1;
     if (line != "\r") {
-        std::cout << "somehow don't have redundant CRLF at end of headers when we expected to" << std::endl;
         client_error_code = 400;
-        std::cout << "error 10" << std::endl;
         return true;
     }
 
@@ -239,7 +228,6 @@ bool HttpRequest::parse_request(std::string& request_str) {
         host = headers["Host"];
     } else { 
         client_error_code = 400; //no host, return 400
-        std::cout << "error 11" << std::endl;
         return true;
     }
 
@@ -266,7 +254,6 @@ bool HttpRequest::parse_request(std::string& request_str) {
             
         } catch (...) { //catch invalid content-length field values
             client_error_code = 400;
-            std::cout << "error 13" << std::endl;
             return true;
         }
 
@@ -280,7 +267,6 @@ bool HttpRequest::parse_request(std::string& request_str) {
         //    status code and then close the connection.
         if (!has_chunked) { //has transfer encoding but chunked isnt one of them
             client_error_code = 400;
-            std::cout << "error 14" << std::endl;
             return true;
         }
 
@@ -317,7 +303,6 @@ bool HttpRequest::parse_request(std::string& request_str) {
 
             if (request_str.substr(curr_ptr + chunk_size, 2) != "\r\n") { //ill format
                 client_error_code = 400;
-                std::cout << "error 15" << std::endl;
                 return true;
             }
 
@@ -331,7 +316,6 @@ bool HttpRequest::parse_request(std::string& request_str) {
         while (true) {
             size_t line_end;
             if ((line_end = request_str.find("\r\n", curr_ptr)) == std::string::npos) {
-                std::cout << "havent received either a full trailer-part line or crlf" << std::endl; 
                 return false; //havent received either a trailer-part or crlf, more recv
             }
 
@@ -346,7 +330,6 @@ bool HttpRequest::parse_request(std::string& request_str) {
             size_t pos = line.find(":");
             if (pos == std::string::npos) { //no colon in a header field, bad. 400 response
                 client_error_code = 400;
-                std::cout << "error 16" << std::endl;
                 return true;
             }
 
@@ -358,7 +341,6 @@ bool HttpRequest::parse_request(std::string& request_str) {
                 //also ensure field-name is valid token
             if (!HttpRequest::valid_field_name(key)) {
                 client_error_code = 400;
-                std::cout << "error 17" << std::endl;
                 return true;
             }
 
@@ -376,14 +358,12 @@ bool HttpRequest::parse_request(std::string& request_str) {
             if (key == "Transfer-Encoding" || key == "Content-Length" || key == "Host" || key == "Content-Encoding" || 
                 key == "Content-Type" || key == "Content-Range" || key == "Trailer") {
                 client_error_code = 400;
-                std::cout << "error 18" << std::endl;
                 return true;
             }
 
             if (headers.find(key) != headers.end()) { //found duplicate header field names
                 if (!HttpRequest::can_duplicate_field_name(key)) { //error, cant have multiple of this header field name
                     client_error_code = 400;
-                    std::cout << "error 19" << std::endl;
                     return true;
                 }
 
@@ -411,7 +391,6 @@ bool HttpRequest::parse_request(std::string& request_str) {
     }
 
     //if we've gotten here we have a valid http request, remove from string request_str
-    std::cout << "no errors parsing" << std::endl;
     request_str.erase(0, chars_read); //REMOVE CURRENT HTTP REQUEST FROM REQUEST_STR
     return true;
 }

@@ -7,13 +7,15 @@
 
 class HttpResponse {
 private:
+
+
+public:
     std::string status_line;
     std::unordered_map<std::string, std::string> headers;
     std::string body;
     time_t expiry_time;
     mutable bool requires_validation;
-
-public:
+    
     HttpResponse();
     explicit HttpResponse(const std::string& status);
     bool parse_response(std::string& response_str);

@@ -33,7 +33,6 @@ bool HttpResponse::parse_response(std::string& response_str) {
     size_t status_start = response_str.find("HTTP");
 
     if (status_start == std::string::npos) { //not valid header
-        std::cout << "error 1" << std::endl;
         parse_error = true;
         return true;
     }
@@ -84,7 +83,6 @@ bool HttpResponse::parse_response(std::string& response_str) {
 
         size_t pos = line.find(":");
         if (pos == std::string::npos) { //no colon in a header field, bad.
-            std::cout << "error 2" << std::endl;
             parse_error = true;
             return true;
         }
@@ -94,7 +92,6 @@ bool HttpResponse::parse_response(std::string& response_str) {
 
 
         if (value[value.length() - 1] != '\r') { //ensure field-value ends with CRLF
-            std::cout << "error 3" << std::endl;
             parse_error = true;
             return true;
         } else {
@@ -110,7 +107,6 @@ bool HttpResponse::parse_response(std::string& response_str) {
 
         if (headers.find(key) != headers.end()) { //found duplicate header field names
             if (!HttpRequest::can_duplicate_field_name(key)) { //error, cant have multiple of this header field name
-                std::cout << "error 4" << std::endl;
                 parse_error = true;
                 return true;
             }
@@ -133,7 +129,6 @@ bool HttpResponse::parse_response(std::string& response_str) {
     std::getline(request_stream, line);
     chars_read += line.length() + 1;
     if (line != "\r") {
-        std::cout << "error 5" << std::endl;
         parse_error = true;
         return true;
     }
@@ -161,7 +156,6 @@ bool HttpResponse::parse_response(std::string& response_str) {
             chars_read += len;
             
         } catch (...) { //catch invalid content-length field values
-            std::cout << "error 6" << std::endl;
             parse_error = true;
             return true;
         }
@@ -170,7 +164,6 @@ bool HttpResponse::parse_response(std::string& response_str) {
     } else if (headers.find("Transfer-Encoding") != headers.end()) { //chunked transfer encoding
 
         if (!has_chunked) { //has transfer encoding but chunked isnt one of them
-            std::cout << "error 7" << std::endl;
             parse_error = true;
             return true;
         }
@@ -207,7 +200,6 @@ bool HttpResponse::parse_response(std::string& response_str) {
             }
 
             if (response_str.substr(curr_ptr + chunk_size, 2) != "\r\n") { //ill format
-                std::cout << "error 8" << std::endl;
                 parse_error = true;
                 return true;
             }
@@ -222,7 +214,6 @@ bool HttpResponse::parse_response(std::string& response_str) {
         while (true) {
             size_t line_end;
             if ((line_end = response_str.find("\r\n", curr_ptr)) == std::string::npos) {
-                std::cout << "havent received either a full trailer-part line or crlf" << std::endl; 
                 return false; //havent received either a trailer-part or crlf, more recv
             }
 
@@ -236,7 +227,6 @@ bool HttpResponse::parse_response(std::string& response_str) {
 
             size_t pos = line.find(":");
             if (pos == std::string::npos) { //no colon in a header field, bad. 400 response
-                std::cout << "error 9" << std::endl;
                 parse_error = true;
                 return true;
             }
@@ -257,14 +247,12 @@ bool HttpResponse::parse_response(std::string& response_str) {
             // Content-Encoding, Content-Type, Content-Range, and Trailer).
             if (key == "Transfer-Encoding" || key == "Content-Length" || key == "Host" || key == "Content-Encoding" || 
                 key == "Content-Type" || key == "Content-Range" || key == "Trailer") {
-                std::cout << "error 10" << std::endl;
                 parse_error = true;
                 return true;
             }
 
             if (headers.find(key) != headers.end()) { //found duplicate header field names
                 if (!HttpRequest::can_duplicate_field_name(key)) { //error, cant have multiple of this header field name
-                    std::cout << "error 11" << std::endl;
                     parse_error = true;
                     return true;
                 }
@@ -293,26 +281,25 @@ bool HttpResponse::parse_response(std::string& response_str) {
 
 
     // //check if the response is cachable
-    // if (headers.find("Cache-Control") != headers.end()) {
-    //     std::string cache_control = headers["Cache-Control"];
-    //     if (cache_control.find("no-store") != std::string::npos) {
-    //         return false;  // not cache
-    //     }
-    //     if (cache_control.find("max-age=") != std::string::npos) {
-    //         size_t pos = cache_control.find("max-age=") + 8;
-    //         expiry_time = std::time(nullptr) + std::stoi(cache_control.substr(pos));
-    //     }
-    // }
+    if (headers.find("Cache-Control") != headers.end()) {
+        std::string cache_control = headers["Cache-Control"];
+        if (cache_control.find("no-store") == std::string::npos) {
+            if (cache_control.find("max-age=") != std::string::npos) {
+                size_t pos = cache_control.find("max-age=") + 8;
+                expiry_time = std::time(nullptr) + std::stoi(cache_control.substr(pos));
+            }
+        }
+    }
 
-    // if (headers.find("Expires") != headers.end()) {
-    //     struct tm tm{};
-    //     strptime(headers["Expires"].c_str(), "%a, %d %b %Y %H:%M:%S GMT", &tm);
-    //     expiry_time = mktime(&tm);
-    // }
+    if (headers.find("Expires") != headers.end()) {
+        struct tm tm{};
+        strptime(headers["Expires"].c_str(), "%a, %d %b %Y %H:%M:%S GMT", &tm);
+        expiry_time = mktime(&tm);
+    }
+
 
 
     //if we've gotten here we have a valid http response
-    std::cout << "response: no errors parsing" << std::endl;
     return true;
 }
 
@@ -327,8 +314,8 @@ bool HttpResponse::is_cacheable() const {
         if (cache_control.find("private") != std::string::npos) return false;   // Only for a single user
         if (cache_control.find("must-revalidate") != std::string::npos) requires_validation = true;
     }
-
     if (status_line.find("206 Partial Content") != std::string::npos) return false; // Don't cache partial responses
+
     return expiry_time > std::time(nullptr);
 }
 

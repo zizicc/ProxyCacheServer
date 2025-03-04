@@ -131,7 +131,6 @@ void ProxyServer::start() {
         int client_connection_sockfd = accept(listening_sockfd, (sockaddr*)&client_address, &client_address_len);
 
         if (client_connection_sockfd < 0) {
-            std::cout << "Could not accept new client connection request" << std::endl;
             continue; //don't exit here, try to accept again
         }
 
