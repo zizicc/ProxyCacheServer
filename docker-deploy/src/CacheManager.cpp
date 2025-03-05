@@ -25,17 +25,21 @@ time_t CacheManager::get_expiry_time(const HttpResponse& response) const {
             int max_age = std::stoi(cache_control.substr(pos + 8));
             expiry_time += max_age;
         }
+    } else {
+        expiry_time += 86400;
     }
 
     std::string expires_header = response.get_header("Expires");
     if (!expires_header.empty()) {
         struct tm expiry_tm = {};
-        if (strptime(expires_header.c_str(), "%a, %d %b %Y %H:%M:%S GMT", &expiry_tm)) {
+        if (strptime(expires_header.c_str(), "%a %b %d %H:%M:%S %Y", &expiry_tm)) {
             time_t expires_at = timegm(&expiry_tm);
             expiry_time = std::max(expiry_time, expires_at);
         } else {
             logger.log_warning(0, "Failed to parse Expires header: " + expires_header);
         }
+    } else {
+        expiry_time += 86400;
     }
 
     return expiry_time;
@@ -48,7 +52,7 @@ bool CacheManager::is_in_cache(const std::string& url) {
 }
 
 // Retrieve a cached response if it's still valid
-std::shared_ptr<HttpResponse> CacheManager::get_cached_response(const std::string& url) {
+std::shared_ptr<HttpResponse> CacheManager::get_cached_response(int request_id, const std::string& url) {
     std::lock_guard<std::mutex> lock(cache_mutex);
     auto it = cache_map.find(url);
 
@@ -58,14 +62,14 @@ std::shared_ptr<HttpResponse> CacheManager::get_cached_response(const std::strin
 
     CacheEntry& entry = it->second->second;
     if (is_expired(entry)) {
-        logger.log_cache_status(0, "in cache, but expired at " + entry.response->get_header("Expires"));
+        logger.log_cache_status(request_id, "in cache, but expired at " + entry.response->get_header("Expires"));
         return nullptr;
     }
 
     if (requires_validation(entry)) {
-        logger.log_cache_status(0, "in cache, requires validation");
+        logger.log_cache_status(request_id, "in cache, requires validation");
     } else {
-        logger.log_cache_status(0, "in cache, valid");
+        logger.log_cache_status(request_id, "in cache, valid");
     }
 
     // Move accessed entry to the front (LRU policy)
@@ -78,7 +82,7 @@ void CacheManager::store_response(int request_id, const std::string& url, std::s
     if (!response->is_cacheable()) {
         std::string reason = "not cacheable because status is " + response->get_status_line();
         if (!response->get_header("Cache-Control").empty() && response->get_header("Cache-Control").find("no-store") != std::string::npos) {
-            reason = "not cacheable due to Cache-Control: no-store";
+            reason = "not cacheable because Cache-Control: no-store";
         }
         logger.log_cache_status(request_id, reason);
         return;
@@ -100,19 +104,31 @@ void CacheManager::store_response(int request_id, const std::string& url, std::s
 
     std::string expires = response->get_header("Expires");
     if (expires.empty()) {
-        expires = "max-age=" + std::to_string(get_expiry_time(*response) - std::time(nullptr)) + "s";
+        char buf[100];
+        time_t expiry = get_expiry_time(*response); 
+        strftime(buf, sizeof(buf), "%a %b %d %H:%M:%S %Y", gmtime(&expiry)); 
+        expires = std::string(buf);
+
     }
     logger.log_cache_status(request_id, "cached, expires at " + expires);
 }
 
 // Evict least recently used item if cache is full
 void CacheManager::evict_if_needed() {
-    if (cache_list.size() >= cache_capacity) {
-        auto last = cache_list.end();
-        --last;
+    if (!cache_list.empty() && cache_list.size() >= cache_capacity) {
+        auto last = std::prev(cache_list.end());
         std::string evicted_url = last->first;
         logger.log_note(0, "Evicting " + evicted_url + " from cache");
         cache_map.erase(evicted_url);
         cache_list.pop_back();
+    }
+}
+
+void CacheManager::print_cache_list(const std::list<std::pair<std::string, CacheEntry>>& cache_list) {
+    std::cout << "Cache List Contents (LRU order):\n";
+    for (const auto& entry : cache_list) {
+        const std::string& url = entry.first;
+        const CacheEntry& cache_entry = entry.second;
+        std::cout << "URL: " << url << " | Expires at: " << cache_entry.expiry_time << "\n";
     }
 }

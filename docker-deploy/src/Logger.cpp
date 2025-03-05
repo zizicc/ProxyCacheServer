@@ -11,12 +11,12 @@ Logger& Logger::get_instance() {
 
 // Private constructor: Opens log file
 Logger::Logger() {
-    log_file.open("/var/log/erss/proxy.log", std::ios::app);
+    log_file.open("/var/log/erss/proxy.log", std::ios::trunc);
     
     // Fallback to local log if system log fails
     if (!log_file.is_open()) {
         std::cerr << "ERROR: Failed to open /var/log/erss/proxy.log! Logging to ./proxy.log instead.\n";
-        log_file.open("proxy.log", std::ios::app);
+        log_file.open("proxy.log", std::ios::trunc);
     }
 
     if (!log_file.is_open()) {
@@ -35,7 +35,8 @@ Logger::~Logger() {
 std::string Logger::get_current_time() const {
     std::time_t now = std::time(nullptr);
     char buf[100];
-    strftime(buf, sizeof(buf), "%a %d %b %Y %H:%M:%S GMT", gmtime(&now)); // Ensure GMT formatting
+    //strftime(buf, sizeof(buf), "%a %d %b %Y %H:%M:%S", gmtime(&now)); // Ensure GMT formatting
+    strftime(buf, sizeof(buf), "%a %b %d %H:%M:%S %Y", gmtime(&now));
     return std::string(buf);
 }
 
@@ -61,6 +62,7 @@ void Logger::log_request(int id, const std::string& request, const std::string& 
 // Log cache status
 void Logger::log_cache_status(int id, const std::string& status) {
     log(std::to_string(id) + ": " + status);
+    std::cout << "logged! cache!" << std::endl;
 }
 
 // Log request forwarding to origin server

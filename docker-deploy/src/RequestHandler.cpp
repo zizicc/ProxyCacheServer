@@ -56,7 +56,7 @@ int RequestHandler::handle_request(HttpRequest& request, int client_socket, int 
     // Handle GET request and caching
     if (method == "GET") {
         if (cache.is_in_cache(url)) {
-            std::shared_ptr<HttpResponse> cached_response = cache.get_cached_response(url);
+            std::shared_ptr<HttpResponse> cached_response = cache.get_cached_response(request_id,url);
             if (cached_response) {
                 if (request.has_header("If-Modified-Since") || request.has_header("If-None-Match")) {
                     logger.log_cache_status(request_id, "in cache, requires validation");
@@ -75,7 +75,7 @@ int RequestHandler::handle_request(HttpRequest& request, int client_socket, int 
                         return 0;
                     } //DO WE NEED AN ELSE??
                 } else {
-                    logger.log_cache_status(request_id, "in cache, valid");
+                    //logger.log_cache_status(request_id, "in cache, valid");
                     if (reliable_send(client_socket, cached_response->serialize().c_str(), cached_response->serialize().length(), request_id) < 0) {
                         return -1;
                     }
@@ -105,8 +105,10 @@ int RequestHandler::handle_request(HttpRequest& request, int client_socket, int 
 
     // Cache only 200 OK GET responses
     if (method == "GET" && response.is_cacheable()) {
+        std::cout << "cacheable222222" << std::endl;
         cache.store_response(request_id, url, std::make_shared<HttpResponse>(response));
-        logger.log_cache_status(request_id, "cached, expires at " + response.get_header("Expires"));
+        //logger.log_cache_status(request_id, "cached, expires at " + response.get_header("Expires"));
+        std::cout << "cacheable4444444" << std::endl;
     }
 
 
@@ -189,8 +191,11 @@ HttpResponse RequestHandler::forward_request(HttpRequest& request, int request_i
         //Returns true even if malformed response.
         HttpResponse response2;
         bool res = response2.parse_response(curr_message);
+
+        
         if (res) {
             if (response2.parse_error) { //if parse error, just use default 502 bad gateway
+                std::cout << "response error" << std::endl;
                 logger.log_error(request_id, "Received invalid response from server.");
                 close(sockfd);
                 return HttpResponse(); //502 Bad Gateway
@@ -203,6 +208,8 @@ HttpResponse RequestHandler::forward_request(HttpRequest& request, int request_i
 
     // Log received response
     logger.log_received_response(request_id, response.get_status_line(), server);
+
+    //std::cout << response.serialize() << std::endl;
 
     close(sockfd);
     return response;

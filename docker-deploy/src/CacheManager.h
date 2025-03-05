@@ -30,9 +30,10 @@ private:
 public:
     explicit CacheManager(size_t capacity = 100);
     bool is_in_cache(const std::string& url);
-    std::shared_ptr<HttpResponse> get_cached_response(const std::string& url);
+    std::shared_ptr<HttpResponse> get_cached_response(int request_id, const std::string& url);
     void store_response(int request_id, const std::string& url, std::shared_ptr<HttpResponse> response);
     void evict_if_needed();
+    void print_cache_list(const std::list<std::pair<std::string, CacheEntry>>& cache_list);
 };
 
 #endif
