@@ -32,6 +32,7 @@ void ClientHandler::handle_client_requests(int client_sockfd, CacheManager& cach
     bool force_connection_close = false;
 
     while (!stop_flag && !force_connection_close) { //will stop when it sees stop flag is set to shutdown socket and thread (or forced close)
+        try{
             int bytes_read = recv(client_sockfd, buffer, buffer_read_size, 0);
             
             if (bytes_read < 0) {
@@ -78,6 +79,8 @@ void ClientHandler::handle_client_requests(int client_sockfd, CacheManager& cach
                 }
 
             }
-
+        } catch (const std::exception& e) { //catch all errors
+            
+        }
     }
 }
