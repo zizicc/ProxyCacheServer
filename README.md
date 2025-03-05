@@ -58,6 +58,3 @@ wget -e use_proxy=yes -e http_proxy=http://127.0.0.1:12345 http://www.example.co
 - Support `PUT`, `DELETE`
 - LRU-based cache eviction
 - Thread pool optimization
-
-## License
-MIT License.
