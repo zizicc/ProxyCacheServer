@@ -27,7 +27,7 @@ bool HttpResponse::parse_response(std::string& response_str) {
     //otherwise, incomplete http response (can't process yet, must recv more data) or junk data
     size_t headers_end;
     if ((headers_end = response_str.find("\r\n\r\n")) == std::string::npos) {
-        std::cout << "error1" << std::endl;
+        //std::cout << "error1" << std::endl;
         return false;
     }
     
@@ -35,7 +35,7 @@ bool HttpResponse::parse_response(std::string& response_str) {
     size_t status_start = response_str.find("HTTP");
 
     if (status_start == std::string::npos) { //not valid header
-        std::cout << "error2" << std::endl;
+        //std::cout << "error2" << std::endl;
         parse_error = true;
         return true;
     }
@@ -55,8 +55,8 @@ bool HttpResponse::parse_response(std::string& response_str) {
     //PARSE STATUS LINE
     if (!std::getline(request_stream, line) || line.empty()) {
         //not sure what to do here, error?
-        std::cout << "what's this___________________" << line << std::endl;
-        std::cout << "error3" << std::endl;
+        //std::cout << "what's this___________________" << line << std::endl;
+        //std::cout << "error3" << std::endl;
         return false;
     }
 
@@ -78,7 +78,7 @@ bool HttpResponse::parse_response(std::string& response_str) {
         status_line.pop_back();
     }
 
-    std::cout << "status_line" << status_line << std::endl;
+    //std::cout << "status_line" << status_line << std::endl;
 
     bool has_chunked = false; //used for later
 
@@ -179,7 +179,7 @@ bool HttpResponse::parse_response(std::string& response_str) {
             int bodyStart = chars_read;
             if (bodyStart + len > response_str.length()) {
                 //not enough data yet to read full body, need more recv;
-                std::cout << "error4" << std::endl;
+                //std::cout << "error4" << std::endl;
                 return false;
             }
             body = response_str.substr(bodyStart, len); //set body field of HttpRequest
@@ -226,7 +226,7 @@ bool HttpResponse::parse_response(std::string& response_str) {
             }
 
             if (curr_ptr + chunk_size + 2 > response_str.length()) {
-                std::cout << "error5" << std::endl;
+                //std::cout << "error5" << std::endl;
                 return false; //havent received end of chunk data line, more recv
             }
 
@@ -245,7 +245,7 @@ bool HttpResponse::parse_response(std::string& response_str) {
         while (true) {
             size_t line_end;
             if ((line_end = response_str.find("\r\n", curr_ptr)) == std::string::npos) {
-                std::cout << "error6" << std::endl;
+                //std::cout << "error6" << std::endl;
                 return false; //havent received either a trailer-part or crlf, more recv
             }
 
@@ -330,7 +330,7 @@ bool HttpResponse::parse_response(std::string& response_str) {
         expiry_time = mktime(&tm);
     }
 
-    std::cout << expiry_time << std::endl;
+    //std::cout << expiry_time << std::endl;
 
 
 
@@ -343,7 +343,7 @@ bool HttpResponse::parse_response(std::string& response_str) {
 
 
 bool HttpResponse::is_cacheable() const {
-    std::cout << "cacheable????" << std::endl;
+    //std::cout << "cacheable????" << std::endl;
     if (status_line.find("200 OK") == std::string::npos) return false;  // Only cache 200 OK
 
     if (headers.find("Cache-Control") != headers.end()) {
@@ -353,7 +353,7 @@ bool HttpResponse::is_cacheable() const {
         if (cache_control.find("must-revalidate") != std::string::npos) requires_validation = true;
     }
     if (status_line.find("206 Partial Content") != std::string::npos) return false; // Don't cache partial responses
-    std::cout << "cacheable111111" << std::endl;
+    //std::cout << "cacheable111111" << std::endl;
     //std::cout << expiry_time << std::endl;
     //return expiry_time > std::time(nullptr);
     return true;
@@ -383,7 +383,7 @@ std::string HttpResponse::serialize() const {
 }
 
 void HttpResponse::print_headers() {
-    std::cout << "My HTTP Headers:\n";
+    //std::cout << "My HTTP Headers:\n";
     for (const auto& pair : headers) {
         std::cout << pair.first << ": " << pair.second << "\n";
     }

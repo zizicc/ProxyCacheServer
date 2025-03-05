@@ -62,7 +62,7 @@ void Logger::log_request(int id, const std::string& request, const std::string& 
 // Log cache status
 void Logger::log_cache_status(int id, const std::string& status) {
     log(std::to_string(id) + ": " + status);
-    std::cout << "logged! cache!" << std::endl;
+    //std::cout << "logged! cache!" << std::endl;
 }
 
 // Log request forwarding to origin server

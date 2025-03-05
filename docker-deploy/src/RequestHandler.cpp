@@ -105,10 +105,10 @@ int RequestHandler::handle_request(HttpRequest& request, int client_socket, int 
 
     // Cache only 200 OK GET responses
     if (method == "GET" && response.is_cacheable()) {
-        std::cout << "cacheable222222" << std::endl;
+        //std::cout << "cacheable222222" << std::endl;
         cache.store_response(request_id, url, std::make_shared<HttpResponse>(response));
         //logger.log_cache_status(request_id, "cached, expires at " + response.get_header("Expires"));
-        std::cout << "cacheable4444444" << std::endl;
+        //std::cout << "cacheable4444444" << std::endl;
     }
 
 
@@ -195,7 +195,7 @@ HttpResponse RequestHandler::forward_request(HttpRequest& request, int request_i
         
         if (res) {
             if (response2.parse_error) { //if parse error, just use default 502 bad gateway
-                std::cout << "response error" << std::endl;
+                //std::cout << "response error" << std::endl;
                 logger.log_error(request_id, "Received invalid response from server.");
                 close(sockfd);
                 return HttpResponse(); //502 Bad Gateway
