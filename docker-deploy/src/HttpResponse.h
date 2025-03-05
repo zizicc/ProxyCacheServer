@@ -13,7 +13,7 @@ public:
     std::string status_line;
     std::unordered_map<std::string, std::string> headers;
     std::string body;
-    time_t expiry_time;
+    time_t expiry_time = 86400;
     mutable bool requires_validation;
     
     HttpResponse();
@@ -24,6 +24,7 @@ public:
     std::string get_status_line() const;
     std::string get_body() const;
     std::string serialize() const;
+    void print_headers();
 
     bool parse_error;
 };

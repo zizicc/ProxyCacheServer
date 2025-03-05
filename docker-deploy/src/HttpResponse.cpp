@@ -19,6 +19,7 @@ HttpResponse::HttpResponse(const std::string& status) {
 //Returns true even if malformed response.
 //only returns false when we weren't able to parse response yet because not enough data
 bool HttpResponse::parse_response(std::string& response_str) {
+
     status_line = "";
     headers.clear();
     body = "";
@@ -26,13 +27,15 @@ bool HttpResponse::parse_response(std::string& response_str) {
     //otherwise, incomplete http response (can't process yet, must recv more data) or junk data
     size_t headers_end;
     if ((headers_end = response_str.find("\r\n\r\n")) == std::string::npos) {
+        //std::cout << "error1" << std::endl;
         return false;
     }
-
+    
     //valid header end, so get status line
     size_t status_start = response_str.find("HTTP");
 
     if (status_start == std::string::npos) { //not valid header
+        //std::cout << "error2" << std::endl;
         parse_error = true;
         return true;
     }
@@ -50,8 +53,11 @@ bool HttpResponse::parse_response(std::string& response_str) {
         // [ message-body ]
 
     //PARSE STATUS LINE
-    if (!std::getline(request_stream, line)) {
+    if (!std::getline(request_stream, line) || line.empty()) {
         //not sure what to do here, error?
+        //std::cout << "what's this___________________" << line << std::endl;
+        //std::cout << "error3" << std::endl;
+        return false;
     }
 
     chars_read += line.length() + 1; //account for "\n" that getline extracted from stream but didn't put into line
@@ -72,12 +78,31 @@ bool HttpResponse::parse_response(std::string& response_str) {
         status_line.pop_back();
     }
 
+    //std::cout << "status_line" << status_line << std::endl;
+
     bool has_chunked = false; //used for later
 
     //PARSE HEADERS
     //header-field   = field-name ":" OWS field-value OWS
     // field-name     = token
     // field-value    = *( field-content / obs-fold )
+
+
+    // while (std::getline(request_stream, line) && line != "\r") {
+    //     size_t pos = line.find(": ");
+    //     if (pos != std::string::npos) {
+    //         std::string key = line.substr(0, pos);
+    //         std::string value = line.substr(pos + 2);
+    //         if (!value.empty() && value.back() == '\r') {  
+    //             value.pop_back();
+    //         }
+    //         headers[key] = value;
+    //     }
+    // }
+
+    
+
+    
     while (std::getline(request_stream, line)) {
         chars_read += line.length() + 1;
 
@@ -123,6 +148,10 @@ bool HttpResponse::parse_response(std::string& response_str) {
             break;
         }
     }
+    
+    
+    //print_headers();
+    
 
     //ensure we have another CRLF to indicate end of headers
     //shouldn't ever not happen but adding for safety
@@ -150,6 +179,7 @@ bool HttpResponse::parse_response(std::string& response_str) {
             int bodyStart = chars_read;
             if (bodyStart + len > response_str.length()) {
                 //not enough data yet to read full body, need more recv;
+                //std::cout << "error4" << std::endl;
                 return false;
             }
             body = response_str.substr(bodyStart, len); //set body field of HttpRequest
@@ -196,6 +226,7 @@ bool HttpResponse::parse_response(std::string& response_str) {
             }
 
             if (curr_ptr + chunk_size + 2 > response_str.length()) {
+                //std::cout << "error5" << std::endl;
                 return false; //havent received end of chunk data line, more recv
             }
 
@@ -214,6 +245,7 @@ bool HttpResponse::parse_response(std::string& response_str) {
         while (true) {
             size_t line_end;
             if ((line_end = response_str.find("\r\n", curr_ptr)) == std::string::npos) {
+                //std::cout << "error6" << std::endl;
                 return false; //havent received either a trailer-part or crlf, more recv
             }
 
@@ -282,6 +314,7 @@ bool HttpResponse::parse_response(std::string& response_str) {
 
     // //check if the response is cachable
     if (headers.find("Cache-Control") != headers.end()) {
+        
         std::string cache_control = headers["Cache-Control"];
         if (cache_control.find("no-store") == std::string::npos) {
             if (cache_control.find("max-age=") != std::string::npos) {
@@ -297,6 +330,10 @@ bool HttpResponse::parse_response(std::string& response_str) {
         expiry_time = mktime(&tm);
     }
 
+    //std::cout << expiry_time << std::endl;
+
+
+
 
 
     //if we've gotten here we have a valid http response
@@ -306,6 +343,7 @@ bool HttpResponse::parse_response(std::string& response_str) {
 
 
 bool HttpResponse::is_cacheable() const {
+    //std::cout << "cacheable????" << std::endl;
     if (status_line.find("200 OK") == std::string::npos) return false;  // Only cache 200 OK
 
     if (headers.find("Cache-Control") != headers.end()) {
@@ -315,8 +353,10 @@ bool HttpResponse::is_cacheable() const {
         if (cache_control.find("must-revalidate") != std::string::npos) requires_validation = true;
     }
     if (status_line.find("206 Partial Content") != std::string::npos) return false; // Don't cache partial responses
-
-    return expiry_time > std::time(nullptr);
+    //std::cout << "cacheable111111" << std::endl;
+    //std::cout << expiry_time << std::endl;
+    //return expiry_time > std::time(nullptr);
+    return true;
 }
 
 std::string HttpResponse::get_header(const std::string& key) const {
@@ -340,4 +380,11 @@ std::string HttpResponse::serialize() const {
     }
     response << "\r\n" << body;
     return response.str();
+}
+
+void HttpResponse::print_headers() {
+    //std::cout << "My HTTP Headers:\n";
+    for (const auto& pair : headers) {
+        std::cout << pair.first << ": " << pair.second << "\n";
+    }
 }
